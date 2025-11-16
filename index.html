@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Stretchy Dot Indicator</title>
+    <style>
+        * {
+            margin: 0;
+        }
+
+        /* * CSS VARIABLES: All styling and timing constants are defined here. (Customizable properties)....  */
+        :root {
+            --active-color: rgb(59, 130, 246);
+            /* CHANGE ACTIVE DOT AND INDICATOR COLOR */
+            --inactive-color: rgba(59, 130, 246, 0.3);
+            /* CHANGE INACTIVE DOTS COLOR. FOR BEST SUIT, REMAIN OPACITY ON 30% */
+
+            /* DYNAMIC SIZE AND SPACE CONTROLS, INDICATOR CALCULATE THIS VALUE FOR SIZING AND POSITIONING */
+            --dot-size: 15px;
+            --dot-radius: 10px;
+            --dot-spacing: 25px;
+
+            /* DYNAMIC TIMING CONTROLS (Read by JavaScript) */
+            --base-duration-ms: 150;
+            /* Base time in milliseconds */
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #dot-container {
+            display: flex;
+            position: relative;
+        }
+
+        .dot {
+            width: var(--dot-size);
+            height: var(--dot-size);
+            border-radius: var(--dot-radius);
+            background-color: var(--inactive-color);
+            /* INACTIVE: Uses 30% opacity (rgba with 0.3 opacity) */
+            transition: background-color 800ms ease-in-out;
+            cursor: pointer;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+            /* Change background-color opacity to 100% for proper dynamic overlap. */
+            border: none;
+            padding: 0;
+            display: inline-block;
+            /* Ensure the div acts like an inline-block for layout */
+        }
+
+        /* FIX: Use explicit margin to ensure calculated position matches visual position */
+        .dot:not(:first-child) {
+            margin-left: var(--dot-spacing);
+        }
+
+        .dot-active {
+            background-color: var(--active-color);
+            /* ACTIVE: Uses 100% opacity (full color) */
+        }
+
+        .indicator {
+            position: absolute;
+            top: 0;
+            height: var(--dot-size);
+            width: var(--dot-size);
+            border-radius: var(--dot-radius);
+            background-color: var(--active-color);
+            /* INDICATOR: Must rely on --active-color to match active dot's (dot-active) color. */
+            /* The transition duration is now controlled dynamically by JS per animation */
+            transition: left 200ms ease-in-out,
+                width 200ms ease-in-out;
+            z-index: 1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="dot-container"> <!-- Dot Container (The relative wrapper) -->
+
+        <div id="stretchy-indicator" class="indicator"></div> <!-- Indicator Element (The absolute child) -->
+
+        <div class="dot dot-active"></div> <!-- Dot Indicators - JS will auto-assign 'data-index' attribute -->
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+    </div>
+
+    <script>
+        // --- CONSTANTS AND DOM ELEMENTS ---
+        let INDICATOR_SIZE = 20; // Will be read dynamically from the DOM
+        let BASE_DURATION = 200;
+
+        const container = document.getElementById('dot-container');
+        const indicator = document.getElementById('stretchy-indicator');
+        // The dots array selects elements with the class 'dot'
+        const dots = Array.from(container.querySelectorAll('.dot'));
+
+        // activeIndex stores the index of the dot where the indicator currently *is*.
+        let activeIndex = 0;
+
+        /**
+         Reads CSS variables to get animation constants, ensuring easy tuning via CSS.
+         */
+        function getCssVariables() {
+            const rootStyle = getComputedStyle(document.documentElement);
+
+            // Read duration variable from CSS (strip 'ms' or convert to number)
+            const durationMs = rootStyle.getPropertyValue('--base-duration-ms').trim();
+
+            BASE_DURATION = parseInt(durationMs) || 200;
+        }
+
+        /**
+         * Gets the true X coordinate of a dot relative to the dot-container using offsetLeft.
+         * @param {number} index - The index of the dot.
+         * @returns {number} The left position in pixels.
+         */
+        function getIndicatorX(index) {
+            return dots[index] ? dots[index].offsetLeft : 0;
+        }
+
+        /**
+         * Performs the "Stretch and Snap" animation, triggered by the MutationObserver.
+         * The duration is now fixed (BASE_DURATION * 2), meaning the speed increases with distance but is slower overall.
+         * @param {number} oldIndex - The index the indicator is moving *from*.
+         * @param {number} targetIndex - The index the indicator is moving *to*.
+         */
+        function animateIndicator(oldIndex, targetIndex) {
+            if (oldIndex === targetIndex) return;
+
+            const currentX = getIndicatorX(oldIndex);
+            const targetX = getIndicatorX(targetIndex);
+
+            // Calculate stretch boundaries 
+            const minX = Math.min(currentX, targetX);
+            const maxX = Math.max(currentX, targetX);
+
+            // stretchWidth spans from the start dot's left edge to the target dot's right edge
+            const stretchWidth = maxX - minX + INDICATOR_SIZE;
+
+            // DURATION CALCULATION: Now 2x the BASE_DURATION for a slower, fixed travel time.
+            const calculatedDuration = BASE_DURATION * 2;
+            const durationString = `${calculatedDuration}ms`;
+
+            // Phase 1: INSTANT Reset (Transition off) - Snap to the old spot 
+            indicator.style.transitionDuration = '0ms';
+            indicator.style.left = `${currentX}px`;
+            indicator.style.width = `${INDICATOR_SIZE}px`;
+
+            indicator.offsetWidth; // Force reflow for Phase 1 to apply instantly
+
+            // Phase 2: STRETCH OUT
+            setTimeout(() => {
+                // Re-enable transition with the calculated fixed duration
+                indicator.style.transitionDuration = durationString;
+
+                // 2a. Stretch: Indicator expands to span the full distance
+                indicator.style.left = `${minX}px`;
+                indicator.style.width = `${stretchWidth}px`;
+
+                // Phase 3: COLLAPSE/SNAP IN
+                setTimeout(() => {
+                    // 3a. Snap: Shift position and collapse width back to dot size
+                    indicator.style.transitionDuration = durationString;
+                    indicator.style.left = `${targetX}px`;
+                    indicator.style.width = `${INDICATOR_SIZE}px`;
+
+                    // 3b. Final state update - Wait for the collapse to finish
+                    setTimeout(() => {
+                        activeIndex = targetIndex;
+                    }, calculatedDuration);
+
+                }, calculatedDuration); // Wait for the stretch transition (Phase 2) to finish
+
+            }, 0);
+        }
+
+        // --- Class Change Detection ---
+
+        // The observer watches for attribute changes on the dots.
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                if (mutation.attributeName === 'class') {
+                    const targetDot = mutation.target;
+
+                    if (targetDot.classList.contains('dot-active')) {
+                        // The index must be read from the dynamically assigned data-index
+                        const newIndex = parseInt(targetDot.dataset.index, 10);
+
+                        if (newIndex !== activeIndex) {
+                            const oldIndex = activeIndex;
+                            animateIndicator(oldIndex, newIndex);
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- Initialization and Event Listeners ---
+
+        function initialize() {
+            // 0. Read dynamic values from CSS
+            getCssVariables();
+
+            // 1. Dynamic Indicator Size Calculation
+            if (dots.length > 0) {
+                // Read the actual computed width of the dot to set the indicator size
+                INDICATOR_SIZE = dots[0].offsetWidth;
+            }
+
+            // 2. Setup Click Handlers AND Dynamically Assign data-index
+            dots.forEach((dot, index) => {
+                dot.setAttribute('data-index', index.toString());
+
+                dot.addEventListener('click', () => {
+                    const currentActiveDot = container.querySelector('.dot-active');
+
+                    if (currentActiveDot && currentActiveDot !== dot) {
+                        currentActiveDot.classList.remove('dot-active');
+                        dot.classList.add('dot-active');
+                        // MutationObserver handles the animation
+                    }
+                });
+            });
+
+            // 3. Initial Indicator Placement
+            if (dots.length > 0) {
+                activeIndex = dots.findIndex(d => d.classList.contains('dot-active'));
+                if (activeIndex === -1) activeIndex = 0;
+
+                // Use a small timeout to ensure the DOM is fully rendered before reading position
+                setTimeout(() => {
+                    indicator.style.left = `${getIndicatorX(activeIndex)}px`;
+                    indicator.style.width = `${INDICATOR_SIZE}px`;
+                    indicator.style.transitionDuration = '0ms';
+                    indicator.offsetWidth; // Force reflow
+
+                    // Start observing the dots for class attribute changes
+                    dots.forEach(dot => {
+                        observer.observe(dot, { attributes: true });
+                    });
+                }, 50);
+            }
+        }
+
+        window.onload = initialize;
+    </script>
+</body>
+
+</html>
