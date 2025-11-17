@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-
+    
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,25 +10,31 @@
             margin: 0;
         }
 
-        /* * CSS VARIABLES: All styling and timing constants are defined here. (Customizable properties)....  */
+        /* * CSS VARIABLES: All customizable properties (styling and timing function) are defined here....  */
         :root {
-            --active-color: rgb(59, 130, 246);
-            /* CHANGE ACTIVE DOT AND INDICATOR COLOR */
-            --inactive-color: rgba(59, 130, 246, 0.3);
-            /* CHANGE INACTIVE DOTS COLOR. FOR BEST SUIT, REMAIN OPACITY ON 30% */
+            --active-color: rgb(59, 130, 246); /* Change active dot and indicator color here... */
+            --inactive-color: rgba(59, 130, 246, 0.3);  /* Change inactive dots color. For best suit, keep opacity on 30%*/
 
-            /* DYNAMIC SIZE AND SPACE CONTROLS, INDICATOR CALCULATE THIS VALUE FOR SIZING AND POSITIONING */
-            --dot-size: 15px;
-            --dot-radius: 10px;
-            --dot-spacing: 25px;
+            /*INDICATOR CALCULATE THIS VALUE FOR SIZING AND POSITIONING */
+            /* Inactive dot's customizable properties */
+            --inactive-dot-width: 15px;
+            --inactive-dot-height: 15px;
+            --inactive-dot-transition: background-color 400ms ease-in-out;
+            
+            /* Active dot's customizable properties */
+            --active-dot-width: 30px;
+            --active-dot-height: 15px;
+            --active-dot-transition: background-color 800ms ease-in-out;
+            
+            --dot-radius: 10px;  /* All dots & indicator radius for shaping... */
+            --dot-spacing: 25px;   /* Container gap- between dots... */
 
-            /* DYNAMIC TIMING CONTROLS (Read by JavaScript) */
-            --base-duration-ms: 150;
-            /* Base time in milliseconds */
+            --base-duration-ms: 100;  /* Indicator animation's duration custom. (Read by JavaScript) */
+            /* Base time in milliseconds, supports number and 'ms' as string types only... */
         }
 
         body {
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -36,48 +42,40 @@
 
         #dot-container {
             display: flex;
+            gap: var(--dot-spacing);
             position: relative;
         }
 
         .dot {
-            width: var(--dot-size);
-            height: var(--dot-size);
+            width: var(--inactive-dot-width);
+            height: var(--inactive-dot-height);
             border-radius: var(--dot-radius);
-            background-color: var(--inactive-color);
-            /* INACTIVE: Uses 30% opacity (rgba with 0.3 opacity) */
-            transition: background-color 800ms ease-in-out;
+            background-color: var(--inactive-color);   /* INACTIVE: Proper usage of 30% opacity (rgba with 0.3 opacity) */
+            transition: var(--inactive-dot-transition);
             cursor: pointer;
             flex-shrink: 0;
             position: relative;
-            z-index: 2;
-            /* Change background-color opacity to 100% for proper dynamic overlap. */
+            z-index: 2;  /* Change background-color opacity to 100% for proper dynamic overlap. */
             border: none;
             padding: 0;
-            display: inline-block;
-            /* Ensure the div acts like an inline-block for layout */
-        }
-
-        /* FIX: Use explicit margin to ensure calculated position matches visual position */
-        .dot:not(:first-child) {
-            margin-left: var(--dot-spacing);
+            display: block;  /* Ensure the div acts like an inline-block for layout */
         }
 
         .dot-active {
-            background-color: var(--active-color);
-            /* ACTIVE: Uses 100% opacity (full color) */
+            width: var(--active-dot-width);
+            height: var(--active-dot-height);
+            background-color: var(--active-color);  /* ACTIVE: Uses 100% opacity (full color) */
+            transition: var(--active-dot-transition);
         }
 
-        .indicator {
+        .stretchy-indicator {
             position: absolute;
             top: 0;
-            height: var(--dot-size);
-            width: var(--dot-size);
+            display: block;  /* Ensures proper sizing & spacing on inline tag */
+            width: var(--active-dot-width);
+            height: var(--active-dot-height);
             border-radius: var(--dot-radius);
-            background-color: var(--active-color);
-            /* INDICATOR: Must rely on --active-color to match active dot's (dot-active) color. */
-            /* The transition duration is now controlled dynamically by JS per animation */
-            transition: left 200ms ease-in-out,
-                width 200ms ease-in-out;
+            background-color: var(--active-color);  /* INDICATOR: Must rely on active-color to match active dot's color. */
             z-index: 1;
             pointer-events: none;
         }
@@ -88,9 +86,9 @@
 
     <div id="dot-container"> <!-- Dot Container (The relative wrapper) -->
 
-        <div id="stretchy-indicator" class="indicator"></div> <!-- Indicator Element (The absolute child) -->
-
-        <div class="dot dot-active"></div> <!-- Dot Indicators - JS will auto-assign 'data-index' attribute -->
+        <span class="stretchy-indicator"></span> <!-- Indicator Element (The absolute child) -->
+        <!-- Dot Indicators - JS will auto-assign 'data-index' attribute -->
+        <div class="dot dot-active"></div>
         <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
@@ -103,16 +101,14 @@
         let BASE_DURATION = 200;
 
         const container = document.getElementById('dot-container');
-        const indicator = document.getElementById('stretchy-indicator');
+        const indicator = document.querySelector('.stretchy-indicator');
         // The dots array selects elements with the class 'dot'
         const dots = Array.from(container.querySelectorAll('.dot'));
 
         // activeIndex stores the index of the dot where the indicator currently *is*.
         let activeIndex = 0;
 
-        /**
-         Reads CSS variables to get animation constants, ensuring easy tuning via CSS.
-         */
+        /** Reads CSS variables to get animation constants, ensuring easy tuning via CSS.*/
         function getCssVariables() {
             const rootStyle = getComputedStyle(document.documentElement);
 
@@ -122,21 +118,17 @@
             BASE_DURATION = parseInt(durationMs) || 200;
         }
 
-        /**
-         * Gets the true X coordinate of a dot relative to the dot-container using offsetLeft.
+        /** Gets the true X coordinate of a dot relative to the dot-container using offsetLeft.
          * @param {number} index - The index of the dot.
-         * @returns {number} The left position in pixels.
-         */
+         * @returns {number} The left position in pixels. */
         function getIndicatorX(index) {
             return dots[index] ? dots[index].offsetLeft : 0;
         }
 
-        /**
-         * Performs the "Stretch and Snap" animation, triggered by the MutationObserver.
+        /** Performs the "Stretch and Snap" animation, triggered by the MutationObserver.
          * The duration is now fixed (BASE_DURATION * 2), meaning the speed increases with distance but is slower overall.
-         * @param {number} oldIndex - The index the indicator is moving *from*.
-         * @param {number} targetIndex - The index the indicator is moving *to*.
-         */
+         * @param {number} oldIndex - The index the indicator is moving 'from'.
+         * @param {number} targetIndex - The index the indicator is moving 'to'. */
         function animateIndicator(oldIndex, targetIndex) {
             if (oldIndex === targetIndex) return;
 
